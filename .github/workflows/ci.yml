@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: pytest
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  sonarqube:
+    name: SonarQube
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: SonarQube quality gate check
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Install PDF generation library
+        if: always()
+        run: pip install fpdf2
+
+      - name: Generate SonarQube PDF report
+        if: always()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: python scripts/generate_sonar_pdf.py
+
+      - name: Upload SonarQube PDF report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sonarqube-pdf-report
+          path: sonarqube-report.pdf
+
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          trivy-config: trivy.yaml
+          trivyignores: .trivyignore
+          exit-code: "1"
+
+      - name: Trivy filesystem scan — save JSON report
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy-fs-report.json
+          severity: HIGH,CRITICAL
+          trivy-config: trivy.yaml
+          trivyignores: .trivyignore
+
+      - name: Build Docker image
+        if: always()
+        run: docker build -t sonar-trivy-demo:${{ github.sha }} .
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          scan-type: image
+          image-ref: sonar-trivy-demo:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
+          exit-code: "1"
+
+      - name: Trivy image scan — save JSON report
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          scan-type: image
+          image-ref: sonar-trivy-demo:${{ github.sha }}
+          format: json
+          output: trivy-image-report.json
+          severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
+
+      - name: Install PDF generation library
+        if: always()
+        run: pip install fpdf2
+
+      - name: Generate Trivy PDF report
+        if: always()
+        run: python scripts/generate_trivy_pdf.py
+
+      - name: Upload Trivy JSON reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-json-reports
+          path: |
+            trivy-fs-report.json
+            trivy-image-report.json
+
+      - name: Upload Trivy PDF report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-pdf-report
+          path: trivy-report.pdf

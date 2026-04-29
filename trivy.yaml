@@ -1,0 +1,16 @@
+timeout: 10m
+
+scanners:
+  - vuln
+  - secret
+  - misconfig
+
+fs:
+  skip-dirs:
+    - .venv
+    - venv
+    - "**/__pycache__"
+    - .git
+    - .pytest_cache
+  skip-files:
+    - "**/*.pyc"
