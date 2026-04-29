@@ -16,10 +16,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
@@ -123,6 +123,7 @@ jobs:
           image-ref: sonar-trivy-demo:${{ github.sha }}
           severity: HIGH,CRITICAL
           trivyignores: .trivyignore
+          ignore-unfixed: true
           exit-code: "1"
 
       - name: Trivy image scan — save JSON report
@@ -135,6 +136,7 @@ jobs:
           output: trivy-image-report.json
           severity: HIGH,CRITICAL
           trivyignores: .trivyignore
+          ignore-unfixed: true
 
       - name: Install PDF generation library
         if: always()

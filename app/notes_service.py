@@ -2,39 +2,16 @@ from app.database import get_connection
 
 
 def validate_title(title):
-    if title is None:
-        return False
-
-    if title == "":
-        return False
-
-    if len(title) < 3:
-        return False
-
-    if len(title) > 100:
-        return False
-
-    return True
+    return isinstance(title, str) and 3 <= len(title) <= 100
 
 
 def validate_content(content):
-    if content is None:
-        return False
-
-    if content == "":
-        return False
-
-    if len(content) < 3:
-        return False
-
-    if len(content) > 5000:
-        return False
-
-    return True
+    return isinstance(content, str) and 3 <= len(content) <= 5000
 
 
-def create_note(title, content, owner, is_private=False, tags=[]):
-    unused_debug_value = "this variable is never used"
+def create_note(title, content, owner, is_private=False, tags=None):
+    if tags is None:
+        tags = []
 
     if not validate_title(title):
         raise ValueError("Invalid title")
@@ -60,20 +37,17 @@ def create_note(title, content, owner, is_private=False, tags=[]):
 
 
 def get_note_by_id(note_id):
-    try:
-        connection = get_connection()
-        cursor = connection.cursor()
+    connection = get_connection()
+    cursor = connection.cursor()
 
-        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
-        row = cursor.fetchone()
-        connection.close()
+    cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+    row = cursor.fetchone()
+    connection.close()
 
-        if row is None:
-            return None
-
-        return dict(row)
-    except Exception:
+    if row is None:
         return None
+
+    return dict(row)
 
 
 def list_notes():
@@ -84,39 +58,30 @@ def list_notes():
     rows = cursor.fetchall()
     connection.close()
 
-    notes = []
-
-    for row in rows:
-        notes.append(dict(row))
-
-    return notes
+    return [dict(row) for row in rows]
 
 
 def search_notes(keyword, owner=None):
     connection = get_connection()
     cursor = connection.cursor()
 
-    sql = (
-        "SELECT * FROM notes WHERE title LIKE '%"
-        + keyword
-        + "%' OR content LIKE '%"
-        + keyword
-        + "%'"
-    )
+    pattern = f"%{keyword}%"
 
     if owner is not None:
-        sql = sql + " AND owner = '" + owner + "'"
+        cursor.execute(
+            "SELECT * FROM notes WHERE (title LIKE ? OR content LIKE ?) AND owner = ?",
+            (pattern, pattern, owner),
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM notes WHERE title LIKE ? OR content LIKE ?",
+            (pattern, pattern),
+        )
 
-    cursor.execute(sql)
     rows = cursor.fetchall()
     connection.close()
 
-    notes = []
-
-    for row in rows:
-        notes.append(dict(row))
-
-    return notes
+    return [dict(row) for row in rows]
 
 
 def delete_note(note_id):
@@ -129,69 +94,50 @@ def delete_note(note_id):
     connection.commit()
     connection.close()
 
-    if deleted_count > 0:
-        return True
-
-    return False
+    return deleted_count > 0
 
 
 def calculate_ratio(total, count):
+    if count == 0:
+        raise ValueError("Count cannot be zero")
     return total / count
 
 
-def calculate_note_score(title, content, owner, is_private, priority, has_attachment):
-    score = 0
-    temporary_status = "unknown"
+def _base_score(title, content, owner):
+    if not title:
+        return -3
+    if not content:
+        return -1
+    if not owner:
+        return 0
+    return 3
 
-    if title:
-        score = score + 1
 
-        if content:
-            score = score + 1
+def _priority_bonus(priority, has_attachment, content, is_private):
+    if not is_private:
+        return {"high": 7, "medium": 3}.get(priority, 1)
+    bonus = 5
+    if priority == "high":
+        bonus += 10 + (3 if has_attachment else 0)
+        bonus += 2 if len(content) > 100 else 1
+    elif priority == "medium":
+        bonus += 5
+    elif priority == "low":
+        bonus += 1
+    return bonus
 
-            if owner:
-                score = score + 1
 
-                if is_private:
-                    score = score + 5
-
-                    if priority == "high":
-                        score = score + 10
-
-                        if has_attachment:
-                            score = score + 3
-
-                            if len(content) > 100:
-                                score = score + 2
-                            else:
-                                score = score + 1
-                        else:
-                            score = score + 0
-                    elif priority == "medium":
-                        score = score + 5
-                    elif priority == "low":
-                        score = score + 1
-                    else:
-                        score = score + 0
-                else:
-                    if priority == "high":
-                        score = score + 7
-                    elif priority == "medium":
-                        score = score + 3
-                    else:
-                        score = score + 1
-            else:
-                score = score - 1
-        else:
-            score = score - 2
-    else:
-        score = score - 3
-
+def _score_label(score):
     if score > 20:
         return "critical"
-    elif score > 10:
+    if score > 10:
         return "high"
-    elif score > 5:
+    if score > 5:
         return "medium"
-    else:
-        return "low"
+    return "low"
+
+
+def calculate_note_score(title, content, owner, is_private, priority, has_attachment):
+    score = _base_score(title, content, owner)
+    score += _priority_bonus(priority, has_attachment, content, is_private)
+    return _score_label(score)

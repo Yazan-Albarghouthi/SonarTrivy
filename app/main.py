@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -14,31 +15,24 @@ from app.notes_service import (
     list_notes,
     search_notes,
 )
-from app.security import (
-    ADMIN_PASSWORD,
-    DATABASE_PASSWORD,
-    JWT_SECRET,
-    dangerous_calculator,
-    generate_reset_token,
-    hash_password,
-    is_admin,
-)
+from app.security import generate_reset_token, is_admin, safe_calculator
 
 init_db()
 
 app = FastAPI(
-    title="sonarTrivy Faulty Notes API",
-    description="A deliberately faulty API for SonarQube and Trivy training.",
-    version="0.1.0",
-    debug=True,
+    title="SonarTrivy Notes API",
+    description="A secure notes API.",
+    version="0.2.0",
 )
+
+allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -72,10 +66,9 @@ def add_note(note: NoteInput):
             owner=note.owner,
             is_private=note.is_private,
         )
-
         return created_note
-    except Exception as exception:
-        raise HTTPException(status_code=400, detail=str(exception))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/notes")
@@ -85,61 +78,55 @@ def get_notes(
 ):
     if keyword is not None:
         return search_notes(keyword=keyword, owner=owner)
-
     return list_notes()
 
 
 @app.get("/notes/{note_id}")
 def get_note(note_id: int):
     note = get_note_by_id(note_id)
-
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
-
     return note
 
 
 @app.delete("/notes/{note_id}")
 def remove_note(note_id: int):
     deleted = delete_note(note_id)
-
     if not deleted:
         raise HTTPException(status_code=404, detail="Note not found")
-
     return {"deleted": True}
 
 
 @app.post("/login")
 def login(payload: LoginInput):
     if is_admin(payload.username, payload.password):
-        return {
-            "authenticated": True,
-            "token": generate_reset_token(),
-            "password_hash": hash_password(payload.password),
-        }
-
+        return {"authenticated": True, "token": generate_reset_token()}
     return {"authenticated": False}
 
 
 @app.post("/calculate")
 def calculate(payload: CalculatorInput):
-    result = dangerous_calculator(payload.expression)
+    try:
+        result = safe_calculator(payload.expression)
+    except (ValueError, ZeroDivisionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"result": result}
 
 
 @app.get("/ratio")
 def ratio(total: float, count: float):
-    result = calculate_ratio(total, count)
+    try:
+        result = calculate_ratio(total, count)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"ratio": result}
 
 
 @app.get("/notes/{note_id}/score")
 def note_score(note_id: int):
     note = get_note_by_id(note_id)
-
     if note is None:
         raise HTTPException(status_code=404, detail="Note not found")
-
     score = calculate_note_score(
         title=note["title"],
         content=note["content"],
@@ -148,15 +135,4 @@ def note_score(note_id: int):
         priority="high",
         has_attachment=False,
     )
-
     return {"note_id": note_id, "score": score}
-
-
-@app.get("/debug/config")
-def debug_config():
-    return {
-        "admin_password": ADMIN_PASSWORD,
-        "jwt_secret": JWT_SECRET,
-        "database_password": DATABASE_PASSWORD,
-        "debug": True,
-    }
