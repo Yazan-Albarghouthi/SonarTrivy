@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.notes_service import _base_score, _priority_bonus, _score_label, calculate_note_score
+from app.security import hash_password, generate_reset_token, safe_calculator
 
 client = TestClient(app)
 
@@ -104,6 +106,16 @@ def test_login_unauthenticated():
     assert response.json()["authenticated"] is False
 
 
+def test_login_authenticated(monkeypatch):
+    monkeypatch.setenv("ADMIN_USERNAME", "demouser")
+    monkeypatch.setenv("ADMIN_PASSWORD", "demopass123")
+    response = client.post("/login", json={"username": "demouser", "password": "demopass123"})
+    assert response.status_code == 200
+    assert response.json()["authenticated"] is True
+    assert "token" in response.json()
+    assert len(response.json()["token"]) == 32
+
+
 def test_calculator_addition():
     response = client.post("/calculate", json={"expression": "1 + 2"})
     assert response.status_code == 200
@@ -163,3 +175,46 @@ def test_note_score():
 def test_note_score_not_found():
     response = client.get("/notes/999999/score")
     assert response.status_code == 404
+
+
+def test_base_score_branches():
+    assert _base_score("", "content", "owner") == -3
+    assert _base_score("title", "", "owner") == -1
+    assert _base_score("title", "content", "") == 0
+    assert _base_score("title", "content", "owner") == 3
+
+
+def test_priority_bonus_branches():
+    assert _priority_bonus("high", False, "x", False) == 7
+    assert _priority_bonus("medium", False, "x", False) == 3
+    assert _priority_bonus("low", False, "x", False) == 1
+    assert _priority_bonus("high", True, "x" * 200, True) > 10
+    assert _priority_bonus("medium", True, "x", True) == 10
+    assert _priority_bonus("low", True, "x", True) == 6
+
+
+def test_score_label_branches():
+    assert _score_label(25) == "critical"
+    assert _score_label(15) == "high"
+    assert _score_label(7) == "medium"
+    assert _score_label(2) == "low"
+
+
+def test_hash_password():
+    h = hash_password("mysecret")
+    assert len(h) == 64
+    assert hash_password("mysecret") == h
+
+
+def test_generate_reset_token():
+    token = generate_reset_token()
+    assert len(token) == 32
+    assert token != generate_reset_token()
+
+
+def test_safe_calculator_subtraction():
+    assert safe_calculator("10 - 3") == 7
+
+
+def test_safe_calculator_multiplication():
+    assert safe_calculator("4 * 5") == 20

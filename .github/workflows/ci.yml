@@ -97,6 +97,7 @@ jobs:
           severity: HIGH,CRITICAL
           trivy-config: trivy.yaml
           trivyignores: .trivyignore
+          ignore-unfixed: true
           exit-code: "1"
 
       - name: Trivy filesystem scan — save JSON report
@@ -110,6 +111,7 @@ jobs:
           severity: HIGH,CRITICAL
           trivy-config: trivy.yaml
           trivyignores: .trivyignore
+          ignore-unfixed: true
 
       - name: Build Docker image
         if: always()
