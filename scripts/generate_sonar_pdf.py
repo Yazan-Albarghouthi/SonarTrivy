@@ -50,7 +50,7 @@ class SonarPDF(FPDF):
         self.set_font("Helvetica", "B", 9)
         self.cell(
             0, 7,
-            "  SonarQube / SonarCloud Analysis Report \u2014 SonarTrivy Demo Project",
+            "  SonarQube / SonarCloud Analysis Report  -  SonarTrivy Demo Project",
             fill=True, new_x="LMARGIN", new_y="NEXT",
         )
         self.set_text_color(*DARK_TEXT)
@@ -276,7 +276,7 @@ def main():
     gate_conditions = gate_status.get("conditions", [])
 
     measures = {
-        m["metric"]: m.get("value", "\u2014")
+        m["metric"]: m.get("value", " - ")
         for m in ((measures_data or {}).get("component", {}).get("measures") or [])
     }
 
@@ -318,8 +318,8 @@ def main():
     cx, cy = pdf.get_x(), pdf.get_y()
 
     def mv(key: str, suffix: str = "") -> str:
-        v = measures.get(key, "\u2014")
-        return v + suffix if v != "\u2014" else v
+        v = measures.get(key, " - ")
+        return v + suffix if v != " - " else v
 
     cards = [
         ("Bugs",           mv("bugs"),                           TYPE_COLORS["BUG"]),
@@ -342,7 +342,7 @@ def main():
         ("Maintainability", "sqale_rating"),
     ]):
         raw    = measures.get(key, "")
-        letter = RATING_LETTERS.get(raw, safe(raw) or "\u2014")
+        letter = RATING_LETTERS.get(raw, safe(raw) or " - ")
         color  = RATING_COLORS.get(raw, MUTED_TEXT)
         metric_card(pdf, lbl, letter, cx + i * 48, ry, color)
     pdf.set_y(ry + 28)

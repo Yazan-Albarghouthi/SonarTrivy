@@ -29,7 +29,7 @@ class TrivyPDF(FPDF):
         self.set_font("Helvetica", "B", 9)
         self.cell(
             0, 7,
-            "  Trivy Security Scan Report \u2014 SonarTrivy Demo Project",
+            "  Trivy Security Scan Report  -  SonarTrivy Demo Project",
             fill=True, new_x="LMARGIN", new_y="NEXT",
         )
         self.set_text_color(*DARK_TEXT)
@@ -54,7 +54,7 @@ def safe(text: str, limit: int = 200) -> str:
 
 def load_json(path: Path) -> dict:
     if not path.exists():
-        print(f"[warn] {path} not found \u2014 using empty placeholder", file=sys.stderr)
+        print(f"[warn] {path} not found  -  using empty placeholder", file=sys.stderr)
         return {"Results": []}
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -127,7 +127,7 @@ def render_vuln_table(pdf: FPDF, results: list, max_per_target: int = 80):
         pdf.set_text_color(40, 44, 80)
         pdf.cell(
             0, 5,
-            f"  {target}  [{pkg_type}]  \u2014  {len(vulns)} finding(s)",
+            f"  {target}  [{pkg_type}]   -   {len(vulns)} finding(s)",
             fill=True, new_x="LMARGIN", new_y="NEXT",
         )
         pdf.set_text_color(*DARK_TEXT)
@@ -294,7 +294,7 @@ def main():
 
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(40, 44, 80)
-    pdf.cell(0, 6, "Filesystem Scan \u2014 Vulnerability Summary", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, "Filesystem Scan  -  Vulnerability Summary", new_x="LMARGIN", new_y="NEXT")
 
     bx, by = pdf.get_x(), pdf.get_y()
     for i, (sev, col) in enumerate([
@@ -314,7 +314,7 @@ def main():
 
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(40, 44, 80)
-    pdf.cell(0, 6, "Docker Image Scan \u2014 Vulnerability Summary", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, "Docker Image Scan  -  Vulnerability Summary", new_x="LMARGIN", new_y="NEXT")
 
     by2 = pdf.get_y()
     for i, (sev, col) in enumerate([
@@ -332,25 +332,25 @@ def main():
     pdf.set_y(by2 + 30)
 
     pdf.add_page()
-    section_title(pdf, "Filesystem Scan \u2014 Vulnerability Findings")
+    section_title(pdf, "Filesystem Scan  -  Vulnerability Findings")
     render_vuln_table(pdf, fs_results)
 
     pdf.add_page()
-    section_title(pdf, "Filesystem Scan \u2014 Secrets Detected")
+    section_title(pdf, "Filesystem Scan  -  Secrets Detected")
     render_secrets_table(pdf, fs_results)
 
-    section_title(pdf, "Filesystem Scan \u2014 Misconfiguration Findings")
+    section_title(pdf, "Filesystem Scan  -  Misconfiguration Findings")
     render_misconfig_table(pdf, fs_results)
 
     pdf.add_page()
-    section_title(pdf, "Docker Image Scan \u2014 Vulnerability Findings")
+    section_title(pdf, "Docker Image Scan  -  Vulnerability Findings")
     render_vuln_table(pdf, img_results, max_per_target=50)
 
     pdf.add_page()
-    section_title(pdf, "Docker Image Scan \u2014 Secrets Detected")
+    section_title(pdf, "Docker Image Scan  -  Secrets Detected")
     render_secrets_table(pdf, img_results)
 
-    section_title(pdf, "Docker Image Scan \u2014 Misconfiguration Findings")
+    section_title(pdf, "Docker Image Scan  -  Misconfiguration Findings")
     render_misconfig_table(pdf, img_results)
 
     out = "trivy-report.pdf"
